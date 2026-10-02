@@ -8,7 +8,7 @@ import job from "./src/lib/cron.js"
 
 connectDB();
 
-app.listen(3000,()=>{console.log("Server Started at 3000");
+app.listen(process.env.EXPRESS_PORT,()=>{console.log("Server Started at 3000");
     initHackathonCron();
     if(process.env.NODE_ENV=="production"){
         job.start()

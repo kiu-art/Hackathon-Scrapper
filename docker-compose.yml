@@ -1,0 +1,61 @@
+version: "3.8"
+
+services:
+  # Python AI FastAPI Microservice (Internal Network Only)
+  ai-service:
+    build:
+      context: ./ai-service
+      dockerfile: Dockerfile
+    container_name: hackathon-ai-service
+    restart: unless-stopped
+    environment:
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - PORT=8000
+    networks:
+      - internal-net
+
+  # Node.js / Express API Gateway
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: hackathon-backend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - MONGO_URI=${MONGO_URI}
+      - CLERK_PUBLISHABLE_KEY=${CLERK_PUBLISHABLE_KEY}
+      - CLERK_SECRET_KEY=${CLERK_SECRET_KEY}
+      - CLERK_WEBHOOK_SIGNING_SECRET=${CLERK_WEBHOOK_SIGNING_SECRET}
+      # Resolves directly to the ai-service container via Docker DNS
+      - AI_SERVICE_URL=http://ai-service:8000
+    depends_on:
+      - ai-service
+    networks:
+      - internal-net
+      - public-net
+
+  # React / Vite Frontend (Nginx)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        - VITE_CLERK_PUBLISHABLE_KEY=${VITE_CLERK_PUBLISHABLE_KEY}
+        - VITE_API_BASE_URL=${VITE_API_BASE_URL:-http://localhost:3000/api}
+    container_name: hackathon-frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - public-net
+
+networks:
+  internal-net:
+    driver: bridge
+  public-net:
+    driver: bridge
