@@ -242,8 +242,10 @@ const scrapeAllUnstop = async (maxPages = 100) => {
       args: [
         "--no-sandbox",
         "--disable-setuid-sandbox",
-        "--disable-dev-shm-usage",
+        "--disable-dev-shm-usage", // Prevents shared memory crashes in Docker/Render
         "--disable-gpu",
+        "--no-zygote",
+        "--single-process",
       ],
     });
 
@@ -421,8 +423,10 @@ const scrapeHackathonDetails = async (url, existingBrowser = null) => {
         args: [
           "--no-sandbox",
           "--disable-setuid-sandbox",
-          "--disable-dev-shm-usage",
-          "--disable-blink-features=AutomationControlled",
+          "--disable-dev-shm-usage", // Prevents shared memory crashes in Docker/Render
+          "--disable-gpu",
+          "--no-zygote",
+          "--single-process",
         ],
       });
       shouldCloseBrowser = true;
