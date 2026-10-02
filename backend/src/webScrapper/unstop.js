@@ -6,7 +6,7 @@ const scrapeUnstop = async (page, pageNumber) => {
   console.log(`Scraping Unstop page ${pageNumber}`);
 
   await page.waitForSelector("app-competition-listing", {
-    timeout: 30000,
+    timeout: 300000,
   });
 
   await new Promise((resolve) => setTimeout(resolve, 2000));
@@ -266,18 +266,18 @@ const scrapeAllUnstop = async (maxPages = 100) => {
 
     await page.goto(BASE_URL, {
       waitUntil: "networkidle2",
-      timeout: 60000,
+      timeout: 600000,
     });
 
     await page.waitForSelector(
       "app-competition-listing",
       {
-        timeout: 30000,
+        timeout: 300000,
       }
     );
 
     await new Promise((resolve) =>
-      setTimeout(resolve, 3000)
+      setTimeout(resolve, 30000)
     );
 
     for (
@@ -353,7 +353,7 @@ const scrapeAllUnstop = async (maxPages = 100) => {
             );
           },
           {
-            timeout: 30000,
+            timeout: 300000,
           },
           previousLinks
         );
@@ -370,7 +370,7 @@ const scrapeAllUnstop = async (maxPages = 100) => {
       }
 
       await new Promise((resolve) =>
-        setTimeout(resolve, 1000)
+        setTimeout(resolve, 10000)
       );
     }
 
@@ -595,7 +595,7 @@ const scrapeHackathonDetails = async (url, existingBrowser = null) => {
         filteredLines.push(cleaned);
       }
 
-      const fullContentText = filteredLines.join("\n").slice(0, 4000);
+      const fullContentText = filteredLines.join("\n").slice(0, 40000);
 
       // 4. Tech Stack Extraction
       const knownTech = [
