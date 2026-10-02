@@ -31,7 +31,9 @@ app.use(
 
 app.use("/api/webhooks/clerk",express.raw({type:"application/json"}),clerkWebhook);
 
-
+app.get("/health", (req, res) => {
+  res.status(200).send("OK");
+});
 app.use(clerkMiddleware());
 
 app.use(express.json());
