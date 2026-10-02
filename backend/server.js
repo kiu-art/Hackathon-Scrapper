@@ -8,9 +8,12 @@ import job from "./src/lib/cron.js"
 
 connectDB();
 
-app.listen(process.env.EXPRESS_PORT,()=>{console.log(`Server Started at ${process.env.EXPRESS_PORT}`);
-    initHackathonCron();
-    if(process.env.NODE_ENV=="production"){
-        job.start()
-    }
-})
+const PORT = process.env.PORT || process.env.EXPRESS_PORT || 3000;
+
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`Server Started on port ${PORT}`);
+  initHackathonCron();
+  if (process.env.NODE_ENV === "production") {
+    job.start();
+  }
+});
