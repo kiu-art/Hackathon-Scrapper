@@ -207,36 +207,36 @@ export const runDailyHackathonSync = async () => {
  * Initializes the cron scheduler.
  * "0 0 * * *" = Runs every day at 00:00 (Midnight).
 */
-export const initHackathonCron = () => {
-  // 1. Run immediately on server boot
-  (async () => {
-    console.log("🚀 [SERVER_BOOT] Running initial hackathon scraper...");
-    await executeSync("SERVER_STARTUP");
-  })();
-
-  // 2. Daily midnight cron job (00:00)
-  cron.schedule("0 0 * * *", async () => {
-    console.log("[CRON] Midnight trigger fired.");
-
-    // Check if a sync happened less than 20 minutes ago
-    if (lastSyncTime && Date.now() - lastSyncTime.getTime() < TWENTY_MINUTES_MS) {
-      const elapsedMinutes = Math.round((Date.now() - lastSyncTime.getTime()) / 60000);
-      console.log(
-        `[CRON] Skipped midnight sync: Last sync occurred only ${elapsedMinutes} minute(s) ago (< 20 min threshold).`
-      );
-      return;
-    }
-
-    await executeSync("MIDNIGHT_CRON");
-  });
-
-  console.log("⏰ Daily Hackathon Pipeline scheduled (00:00 nightly + server boot trigger, 20-min cooldown).");
-};
 // export const initHackathonCron = () => {
+//   // 1. Run immediately on server boot
+//   (async () => {
+//     console.log("🚀 [SERVER_BOOT] Running initial hackathon scraper...");
+//     await executeSync("SERVER_STARTUP");
+//   })();
+
+//   // 2. Daily midnight cron job (00:00)
 //   cron.schedule("0 0 * * *", async () => {
 //     console.log("[CRON] Midnight trigger fired.");
-//     await runDailyHackathonSync();
+
+//     // Check if a sync happened less than 20 minutes ago
+//     if (lastSyncTime && Date.now() - lastSyncTime.getTime() < TWENTY_MINUTES_MS) {
+//       const elapsedMinutes = Math.round((Date.now() - lastSyncTime.getTime()) / 60000);
+//       console.log(
+//         `[CRON] Skipped midnight sync: Last sync occurred only ${elapsedMinutes} minute(s) ago (< 20 min threshold).`
+//       );
+//       return;
+//     }
+
+//     await executeSync("MIDNIGHT_CRON");
 //   });
 
-//   console.log("⏰ Daily Hackathon Pipeline scheduled to run every night at 00:00.");
+//   console.log("⏰ Daily Hackathon Pipeline scheduled (00:00 nightly + server boot trigger, 20-min cooldown).");
 // };
+export const initHackathonCron = () => {
+  cron.schedule("0 0 * * *", async () => {
+    console.log("[CRON] Midnight trigger fired.");
+    await runDailyHackathonSync();
+  });
+
+  console.log("⏰ Daily Hackathon Pipeline scheduled to run every night at 00:00.");
+};

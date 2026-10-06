@@ -18,7 +18,7 @@ export const getRecommendedHackathons = async (req, res) => {
   try {
     const userId = req.user?._id || req.user?.id || req.query.userId;
     const clerkId = req.user?.clerkId || req.auth?.userId;
-    const topK = parseInt(req.query.limit, 10) || 20; // Default to 20 for frontend grid
+    const topK = parseInt(req.query.limit, 10) || 200; // Default to 20 for frontend grid
     const category = req.query.category;
 
     if (!userId && !clerkId) {
