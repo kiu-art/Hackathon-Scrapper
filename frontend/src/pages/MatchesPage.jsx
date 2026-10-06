@@ -4,21 +4,21 @@ import { useHackathonStore } from "../store/useHackathonStore";
 import { useUserStore } from "../store/useUserStore";
 
 /**
- * Normalizes different score properties returned by various vector/BM25 backends.
- * Handles: finalScore, matchScore, score, similarity (0.0 - 1.0 or 0 - 100).
+ * Normalizes scores from the AI microservice's ScoredHackathon schema:
+ * handles `final_score` (0-100 float), `finalScore`, or vector similarities.
  */
 const extractScore = (h) => {
   if (!h) return null;
   const raw =
+    h.final_score ??
     h.finalScore ??
-    h.matchScore ??
     h.score ??
-    h.compatibilityScore ??
-    (typeof h.similarity === "number" ? h.similarity : null);
+    h.matchScore ??
+    h.compatibilityScore;
 
   if (typeof raw !== "number" || isNaN(raw)) return null;
 
-  // Scale decimal embeddings (e.g., 0.82 -> 82)
+  // Scale decimal fractions (e.g., 0.85 -> 85) or round float percentages (e.g., 84.7 -> 85)
   return Math.round(raw <= 1 && raw > 0 ? raw * 100 : raw);
 };
 
@@ -39,6 +39,7 @@ export const MatchesPage = ({ onSelectHackathon, onNavigateToProfile }) => {
   const [minScore, setMinScore] = useState(0); // 0 | 50 | 75
   const [activeDeadlineOnly, setActiveDeadlineOnly] = useState(false);
 
+  // Load recommendations on mount
   useEffect(() => {
     fetchHackathons();
   }, [fetchHackathons]);
@@ -50,21 +51,52 @@ export const MatchesPage = ({ onSelectHackathon, onNavigateToProfile }) => {
     }
   };
 
-  // 1. Normalize hackathon items so score is universally accessible as `finalScore` and `score`
+  // 1. Dual-casing Normalization Bridge:
+  // Bridges FastAPI's snake_case schema to standard React camelCase while keeping both intact.
   const normalizedHackathons = useMemo(() => {
     if (!Array.isArray(hackathons)) return [];
+
     return hackathons.map((h) => {
       const score = extractScore(h);
+      const deadline = h.current_deadline ?? h.currentDeadline ?? h.deadline ?? null;
+      const matched = h.matched_skills ?? h.matchedSkills ?? [];
+      const missing = h.missing_skills ?? h.missingSkills ?? [];
+      const techStack =
+        h.tech_stack ??
+        h.techStack ??
+        [...matched, ...missing];
+
       return {
         ...h,
+        // Match Scores (both casing conventions)
         finalScore: score,
+        final_score: score,
         score: score,
-        matchScore: score,
+
+        // AI Engine Telemetry
+        vectorSimilarity: h.vector_similarity ?? h.vectorSimilarity ?? 0,
+        vector_similarity: h.vector_similarity ?? h.vectorSimilarity ?? 0,
+        techMatchRatio: h.tech_match_ratio ?? h.techMatchRatio ?? 0,
+        tech_match_ratio: h.tech_match_ratio ?? h.techMatchRatio ?? 0,
+        matchedSkills: matched,
+        matched_skills: matched,
+        missingSkills: missing,
+        missing_skills: missing,
+        fitSummary: h.fit_summary ?? h.fitSummary ?? null,
+        fit_summary: h.fit_summary ?? h.fitSummary ?? null,
+
+        // Core Hackathon Metadata
+        techStack,
+        tech_stack: techStack,
+        currentDeadline: deadline,
+        current_deadline: deadline,
+        prize: typeof h.prize === "number" ? h.prize : Number(h.prize) || 0,
+        fee: h.fee ?? null,
       };
     });
   }, [hackathons]);
 
-  // 2. Global Telemetry Metrics (computed across the whole cluster)
+  // 2. Telemetry Statistics Calculation
   const metrics = useMemo(() => {
     if (normalizedHackathons.length === 0) {
       return { total: 0, highMatch: 0, avgScore: 0, activeDeadlines: 0 };
@@ -95,7 +127,7 @@ export const MatchesPage = ({ onSelectHackathon, onNavigateToProfile }) => {
     };
   }, [normalizedHackathons]);
 
-  // 3. Multi-Variable Filtering Pipeline
+  // 3. Multi-Variable Filter Pipeline
   const filteredHackathons = useMemo(() => {
     const now = new Date();
     const q = searchQuery.toLowerCase().trim();
@@ -113,14 +145,14 @@ export const MatchesPage = ({ onSelectHackathon, onNavigateToProfile }) => {
 
       // Cash Prize Filter
       if (prizeFilter === "any") {
-        if (!h.prize || Number(h.prize) <= 0) return false;
+        if (!h.prize || h.prize <= 0) return false;
       } else if (prizeFilter === "50k") {
-        if (!h.prize || Number(h.prize) < 50000) return false;
+        if (!h.prize || h.prize < 50000) return false;
       } else if (prizeFilter === "100k") {
-        if (!h.prize || Number(h.prize) < 100000) return false;
+        if (!h.prize || h.prize < 100000) return false;
       }
 
-      // Match Score Filter
+      // Match Score Threshold Filter
       if (minScore > 0) {
         if (typeof h.finalScore !== "number" || h.finalScore < minScore) {
           return false;
@@ -134,14 +166,18 @@ export const MatchesPage = ({ onSelectHackathon, onNavigateToProfile }) => {
         }
       }
 
-      // Text Search Query (Title, Organizer, Tech Stack)
+      // Text Search Query (Title, Organizer, Tech Stack, or Skills)
       if (q) {
         const titleMatch = h.title?.toLowerCase().includes(q);
         const orgMatch = h.organizer?.toLowerCase().includes(q);
-        const techMatch = Array.isArray(h.techStack)
-          ? h.techStack.some((t) => t.toLowerCase().includes(q))
-          : false;
-        if (!titleMatch && !orgMatch && !techMatch) return false;
+        const matchedSkillMatch = h.matchedSkills.some((s) =>
+          s.toLowerCase().includes(q)
+        );
+        const techMatch = h.techStack.some((s) => s.toLowerCase().includes(q));
+
+        if (!titleMatch && !orgMatch && !matchedSkillMatch && !techMatch) {
+          return false;
+        }
       }
 
       return true;
@@ -182,7 +218,7 @@ export const MatchesPage = ({ onSelectHackathon, onNavigateToProfile }) => {
           <div className="flex items-center gap-2 font-mono text-[11px] text-zinc-500 uppercase tracking-widest">
             <span>MODULE-01</span>
             <span className="text-zinc-700">/</span>
-            <span className="text-zinc-400">VECTOR & BM25 PIPELINE</span>
+            <span className="text-zinc-400">HYBRID MATCH ENGINE (VECTOR + BM25)</span>
           </div>
           <h1 className="text-base font-bold text-zinc-100 tracking-tight mt-0.5">
             Hackathon Matchmaking Matrix
@@ -209,8 +245,8 @@ export const MatchesPage = ({ onSelectHackathon, onNavigateToProfile }) => {
               <span>CANDIDATE VECTOR PROFILE UNINITIALIZED</span>
             </div>
             <p className="text-zinc-400 text-[11px] font-sans">
-              Personalized similarity scores require an indexed profile vector.
-              General listings are displayed below.
+              Similarity scores and skill gap telemetry require an ingested resume embedding.
+              Showing default baseline rankings below.
             </p>
           </div>
 
@@ -226,7 +262,7 @@ export const MatchesPage = ({ onSelectHackathon, onNavigateToProfile }) => {
         </div>
       )}
 
-      {/* Global Telemetry Grid */}
+      {/* Primary Telemetry Grid */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 font-mono text-[11px]">
         <div className="p-3 bg-[#0c0c0e] border border-zinc-800 rounded">
           <span className="text-zinc-500 block uppercase text-[10px]">
@@ -269,10 +305,10 @@ export const MatchesPage = ({ onSelectHackathon, onNavigateToProfile }) => {
       <div className="p-3 bg-[#0c0c0e] border border-zinc-800 rounded space-y-3 font-mono text-[11px]">
         <div className="flex flex-wrap items-center justify-between gap-2.5">
           {/* Quick Search */}
-          <div className="relative flex-1 min-w-[200px] max-w-sm">
+          <div className="relative flex-1 min-w-[220px] max-w-sm">
             <input
               type="text"
-              placeholder="Search by title, organizer, or tech stack..."
+              placeholder="Filter by title, skill, tech stack..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full bg-zinc-900 border border-zinc-800 rounded px-2.5 py-1.5 text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-zinc-700"
@@ -289,7 +325,7 @@ export const MatchesPage = ({ onSelectHackathon, onNavigateToProfile }) => {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            {/* Free Registration Toggle */}
+            {/* Free Registration Filter */}
             <button
               type="button"
               onClick={() => setFreeOnly(!freeOnly)}
@@ -300,10 +336,10 @@ export const MatchesPage = ({ onSelectHackathon, onNavigateToProfile }) => {
               }`}
             >
               <span>{freeOnly ? "✓" : "+"}</span>
-              <span>FREE REGISTRATION</span>
+              <span>FREE ENTRY</span>
             </button>
 
-            {/* Prize Pool Select */}
+            {/* Prize Filter */}
             <select
               value={prizeFilter}
               onChange={(e) => setPrizeFilter(e.target.value)}
@@ -316,19 +352,19 @@ export const MatchesPage = ({ onSelectHackathon, onNavigateToProfile }) => {
               <option value="100k">PRIZE: ≥ ₹1,00,000</option>
             </select>
 
-            {/* Match Score Select */}
+            {/* Match Score Threshold */}
             <select
               value={minScore}
               onChange={(e) => setMinScore(Number(e.target.value))}
               aria-label="Filter by minimum match score"
               className="bg-zinc-900 border border-zinc-800 text-zinc-300 rounded px-2.5 py-1.5 focus:outline-none focus:border-zinc-700"
             >
-              <option value={0}>MATCH: ALL</option>
-              <option value={50}>MATCH: ≥ 50%</option>
-              <option value={75}>MATCH: ≥ 75% (HIGH)</option>
+              <option value={0}>SCORE: ALL</option>
+              <option value={50}>SCORE: ≥ 50%</option>
+              <option value={75}>SCORE: ≥ 75% (TOP MATCH)</option>
             </select>
 
-            {/* Active Deadlines Only Toggle */}
+            {/* Active Deadlines Only */}
             <button
               type="button"
               onClick={() => setActiveDeadlineOnly(!activeDeadlineOnly)}
@@ -338,10 +374,10 @@ export const MatchesPage = ({ onSelectHackathon, onNavigateToProfile }) => {
                   : "bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-zinc-200"
               }`}
             >
-              {activeDeadlineOnly ? "✓ ACTIVE DEADLINES" : "ACTIVE ONLY"}
+              {activeDeadlineOnly ? "✓ ACTIVE ONLY" : "ACTIVE ONLY"}
             </button>
 
-            {/* Reset Button */}
+            {/* Reset Filters */}
             {isFiltered && (
               <button
                 type="button"
@@ -354,18 +390,18 @@ export const MatchesPage = ({ onSelectHackathon, onNavigateToProfile }) => {
           </div>
         </div>
 
-        {/* Results Counter */}
+        {/* Status Counter */}
         <div className="flex items-center justify-between text-zinc-500 border-t border-zinc-900 pt-2 text-[10px]">
           <span>
-            SHOWING {filteredHackathons.length} OF {normalizedHackathons.length} CANDIDATES
+            DISPLAYING {filteredHackathons.length} OF {normalizedHackathons.length} CANDIDATES
           </span>
           {isFiltered && (
-            <span className="text-zinc-400">FILTERS APPLIED</span>
+            <span className="text-zinc-400 font-semibold">ACTIVE FILTERS APPLIED</span>
           )}
         </div>
       </div>
 
-      {/* Main Hackathon Table */}
+      {/* Main Hackathon Table Stage */}
       <div className="space-y-2">
         <HackathonTable
           hackathons={filteredHackathons}
