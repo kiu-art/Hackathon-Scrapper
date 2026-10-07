@@ -78,10 +78,24 @@ export const getRecommendedHackathons = async (req, res) => {
       topK,
     });
 
-    // 4. Return under `data` key expected by Zustand store
+    // 4. Merge AI scores back with full hackathon metadata
+    //    The AI service only returns scoring fields (final_score, matched_skills, etc.)
+    //    but drops metadata like fee, currentDeadline, status that frontend filters need.
+    const hackathonMap = {};
+    for (const h of activeHackathons) {
+      const key = (h._id || h.id).toString();
+      hackathonMap[key] = h;
+    }
+
+    const mergedResults = (Array.isArray(rankedResults) ? rankedResults : []).map((scored) => {
+      const original = hackathonMap[scored.id] || {};
+      return { ...original, ...scored };
+    });
+
+    // 5. Return under `data` key expected by Zustand store
     return res.status(200).json({
       success: true,
-      data: rankedResults,
+      data: mergedResults,
     });
   } catch (error) {
     console.error("[getRecommendedHackathons] Error:", error.message);
